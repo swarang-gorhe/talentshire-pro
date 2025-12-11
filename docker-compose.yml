@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: talentshire-postgres
+    environment:
+      POSTGRES_DB: talentshire
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin@123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./shared/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talentshire-network
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: talentshire-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:admin@123@postgres:5432/talentshire
+      API_PORT: 8000
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared
+      - ./backend:/app/backend
+    networks:
+      - talentshire-network
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: talentshire-frontend
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    networks:
+      - talentshire-network
+    command: npm run dev -- --host 0.0.0.0
+
+  # PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: talentshire-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@talentshire.com
+      PGADMIN_DEFAULT_PASSWORD: admin@123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - talentshire-network
+
+volumes:
+  postgres_data:
+
+networks:
+  talentshire-network:
+    driver: bridge
