@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Talentshire - Technical Assessment Platform</title>
+    <meta name="description" content="Talentshire is a modern technical assessment platform for evaluating candidates with MCQ and coding challenges." />
+    <meta name="author" content="Talentshire" />
+
+    <meta property="og:title" content="Talentshire - Technical Assessment Platform" />
+    <meta property="og:description" content="Evaluate technical talent with comprehensive MCQ and coding assessments." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Talentshire" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <script>
+      console.log("HTML loaded, waiting for React...");
+      window.__APP_LOADED__ = false;
+      window.addEventListener("load", () => {
+        console.log("Window load event fired");
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <div id="debug-panel" style="position: fixed; bottom: 0; left: 0; right: 0; background: #000; color: #0f0; padding: 10px; font-family: monospace; font-size: 11px; max-height: 150px; overflow-y: auto; z-index: 9999; display: none;">
+      <strong>DEBUG:</strong> React not loaded yet...
+    </div>
+    <script>
+      const debugPanel = document.getElementById("debug-panel");
+      function showDebug(msg) {
+        debugPanel.style.display = "block";
+        debugPanel.innerHTML += msg + "<br>";
+        console.log("[DEBUG]", msg);
+      }
+      showDebug("Page loaded, script starting...");
+      setTimeout(() => {
+        if (!window.__APP_LOADED__) {
+          showDebug("⚠️ React not mounted after 5s");
+        }
+      }, 5000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
