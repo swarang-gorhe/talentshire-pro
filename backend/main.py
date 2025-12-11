@@ -441,18 +441,18 @@ def refresh_token_endpoint():
     token = generate_jwt_token("demo-user", "demo@talentshire.com")
     return {"success": True, "data": {"token": token}}
 
-@app.post("/tests/", status_code=201)
-def create_test_endpoint(test: TestCreate):
+# --- UNIFIED API ROUTES (all use /api prefix) ---
+
+@app.post("/api/tests", status_code=201)
+def create_test_api(test: TestCreate):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        # Try to use an existing user as the creator; if none, create a system user
         cur.execute("SELECT user_id FROM users LIMIT 1;")
         row = cur.fetchone()
         if row:
             created_by = row[0]
         else:
-            # Insert a lightweight system user so FK constraints succeed
             system_id = uuid.uuid4()
             cur.execute(
                 "INSERT INTO users (user_id, full_name, email) VALUES (%s, %s, %s) RETURNING user_id;",
@@ -469,8 +469,8 @@ def create_test_endpoint(test: TestCreate):
     return {"success": True, "data": result}
 
 
-@app.get("/tests")
-def list_tests_endpoint():
+@app.get("/api/tests")
+def list_tests_api():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -485,8 +485,8 @@ def list_tests_endpoint():
         return {"success": False, "error": "Error listing tests"}
 
 
-@app.get("/tests/{test_id}")
-def get_test_endpoint(test_id: uuid.UUID):
+@app.get("/api/tests/{test_id}")
+def get_test_api(test_id: uuid.UUID):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -502,20 +502,20 @@ def get_test_endpoint(test_id: uuid.UUID):
         return {"success": False, "error": "Error fetching test"}
 
 
-@app.put("/tests/{test_id}")
-def update_test_endpoint(test_id: uuid.UUID, test: TestCreate):
+@app.put("/api/tests/{test_id}")
+def update_test_api(test_id: uuid.UUID, test: TestCreate):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("UPDATE tests SET test_name = %s, duration_minutes = %s, status = %s WHERE test_id = %s RETURNING test_id, test_name, duration_minutes, status",
-                (test.test_name, test.duration_minutes, (test.status or "DRAFT").upper(), test_id))
+                (test.test_name, test.duration_minutes, (test.status or "draft"), test_id))
         row = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
         if not row:
             raise HTTPException(status_code=404, detail="Test not found for update")
-        return {"test_id": row[0], "test_name": row[1], "duration_minutes": row[2], "status": row[3]}
+        return {"success": True, "data": {"test_id": str(row[0]), "test_name": row[1], "duration_minutes": row[2], "status": row[3]}}
     except HTTPException:
         raise
     except Exception as e:
@@ -523,8 +523,8 @@ def update_test_endpoint(test_id: uuid.UUID, test: TestCreate):
         raise HTTPException(status_code=500, detail="Error updating test")
 
 
-@app.patch("/tests/{test_id}/publish")
-def publish_test_endpoint(test_id: uuid.UUID):
+@app.patch("/api/tests/{test_id}/publish")
+def publish_test_api(test_id: uuid.UUID):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -543,8 +543,8 @@ def publish_test_endpoint(test_id: uuid.UUID):
         raise HTTPException(status_code=500, detail="Error publishing test")
 
 
-@app.get("/candidates/{candidate_id}/assignments")
-def get_assignments_for_candidate(candidate_id: uuid.UUID):
+@app.get("/api/candidates/{candidate_id}/assignments")
+def get_candidate_assignments_api(candidate_id: uuid.UUID):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -552,76 +552,47 @@ def get_assignments_for_candidate(candidate_id: uuid.UUID):
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        data = [{"assignment_id": r[0], "test_id": r[1], "status": r[2], "scheduled_start_time": r[3].isoformat() if r[3] else None, "scheduled_end_time": r[4].isoformat() if r[4] else None} for r in rows]
-        return {"data": data}
+        data = [{"assignment_id": str(r[0]), "test_id": str(r[1]), "status": r[2], "scheduled_start_time": r[3].isoformat() if r[3] else None, "scheduled_end_time": r[4].isoformat() if r[4] else None} for r in rows]
+        return {"success": True, "data": data}
     except Exception as e:
         logger.error(f"Error fetching assignments for candidate: {e}")
         raise HTTPException(status_code=500, detail="Error fetching assignments")
 
-@app.post("/tests/{test_id}/questions/")
-def create_test_question_endpoint(test_id: uuid.UUID, question: TestQuestionCreate):
-    conn = get_db_connection()
-    return create_test_question(conn, test_id, question)
 
-@app.post("/assignments/", status_code=201)
-def assign_test_endpoint(assignment: TestAssignmentCreate):
+@app.post("/api/tests/{test_id}/questions", status_code=201)
+def create_test_question_api(test_id: uuid.UUID, question: TestQuestionCreate):
     conn = get_db_connection()
-    return assign_test_to_candidate(conn, assignment)
+    result = create_test_question(conn, test_id, question)
+    return {"success": True, "data": result}
 
-@app.get("/assignments/{test_id}")
-def get_assignments_endpoint(test_id: uuid.UUID):
+
+@app.post("/api/assignments", status_code=201)
+def assign_test_api(assignment: TestAssignmentCreate):
     conn = get_db_connection()
-    return get_assignments_for_test(conn, test_id)
+    result = assign_test_to_candidate(conn, assignment)
+    return {"success": True, "data": result}
 
-@app.post("/answers/")
-def submit_answer_endpoint(answer: TestAnswerCreate):
+
+@app.get("/api/assignments/{test_id}")
+def get_assignments_api(test_id: uuid.UUID):
     conn = get_db_connection()
-    return submit_test_answer(conn, answer)
+    result = get_assignments_for_test(conn, test_id)
+    return {"success": True, "data": result}
 
-@app.post("/api/answers")
+
+@app.post("/api/answers", status_code=201)
 def submit_answer_api(answer: TestAnswerCreate):
-    """API-aliased answers endpoint"""
     conn = get_db_connection()
     result = submit_test_answer(conn, answer)
     return {"success": True, "data": result}
 
+
 @app.post("/api/filter_mcqs")
-def filter_mcqs_endpoint(filters: FilterRequest):
+def filter_mcqs_api(filters: FilterRequest):
     mcqs = fetch_mcqs(filters.language.value, filters.difficulty_level.value)
     if not mcqs:
         raise HTTPException(status_code=404, detail="No MCQs found with these filters.")
-    return {"mcqs": mcqs}
-
-
-# --- API-prefixed aliases so clients using `/api` base work with this monolith ---
-@app.post("/api/tests", status_code=201)
-def create_test_api(test: TestCreate):
-    return create_test_endpoint(test)
-
-@app.get("/api/tests")
-def list_tests_api():
-    return list_tests_endpoint()
-
-@app.get("/api/tests/{test_id}")
-def get_test_api(test_id: uuid.UUID):
-    return get_test_endpoint(test_id)
-
-@app.put("/api/tests/{test_id}")
-def update_test_api(test_id: uuid.UUID, test: TestCreate):
-    return update_test_endpoint(test_id, test)
-
-@app.patch("/api/tests/{test_id}/publish")
-def publish_test_api(test_id: uuid.UUID):
-    return publish_test_endpoint(test_id)
-
-@app.post("/api/assignments", status_code=201)
-def assign_test_api(assignment: TestAssignmentCreate):
-    result = assign_test_endpoint(assignment)
-    return {"success": True, "data": result}
-
-@app.get("/api/candidates/{candidate_id}/assignments")
-def get_candidate_assignments_api(candidate_id: uuid.UUID):
-    return get_assignments_for_candidate(candidate_id)
+    return {"success": True, "data": mcqs}
 
 # ---- Assignment Management ----
 @app.patch("/api/assignments/{assignment_id}/start")
